@@ -27,7 +27,7 @@ public class KafkaESFootPrintConsumer implements Runnable
 {
     private static final Logger LOG = LoggerFactory.getLogger(KafkaESFootPrintConsumer.class);
 
-    private static final String TOPIC_NAME = "trace-footprint";
+    private static final String TOPIC_NAME = "fat-trace-object";
 
     private static final String ES_HOST = "search.local";
 
