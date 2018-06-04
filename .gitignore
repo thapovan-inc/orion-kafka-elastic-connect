@@ -75,3 +75,5 @@ $RECYCLE.BIN/
 logs
 build
 out
+
+!gradle-wrapper.jar
