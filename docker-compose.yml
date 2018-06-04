@@ -1,0 +1,9 @@
+version: '3'
+services:
+  orionconnect:
+    container_name: orionconnect
+    build: .
+    extra_hosts:
+      - "kafka:kafka"
+      - "search.local:search.local"
+    restart: always
