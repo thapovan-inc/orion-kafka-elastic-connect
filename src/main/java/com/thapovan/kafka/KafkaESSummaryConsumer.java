@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.text.DateFormat;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
@@ -103,25 +104,25 @@ public class KafkaESSummaryConsumer implements Runnable
 
                         String value = record.value();
 
-                        JSONObject data = new JSONObject(value);
+                        JSONObject doc = new JSONObject(value);
 
-                        List<Object> list = data.getJSONArray("serviceNames").toList();
+                        List<Object> list = doc.getJSONArray("serviceNames").toList();
 
                         StringBuilder sb = new StringBuilder();
 
                         list.forEach(o -> sb.append((String) o).append(" "));
 
-                        data.put("serviceNamesStr", sb.toString());
+                        doc.put("serviceNamesStr", sb.toString());
 
-                        long diff = (data.getInt("endTime") - data.getInt("startTime")) / 1000;
+                        long diff = (doc.getInt("endTime") - doc.getInt("startTime")) / 1000;
 
-                        data.put("duration", (diff / 1000));
+                        doc.put("duration", (diff / 1000));
 
                         String status = "PASS";
 
-                        JSONObject traceEventSummary = data.getJSONObject("traceEventSummary");
+                        JSONObject traceEventSummary = doc.getJSONObject("traceEventSummary");
 
-                        data.put("traceEventSummary", traceEventSummary);
+                        doc.put("traceEventSummary", traceEventSummary);
 
                         if (traceEventSummary.getInt("ERROR") > 0 || traceEventSummary.getInt("CRITICAL") > 0)
                         {
@@ -132,12 +133,20 @@ public class KafkaESSummaryConsumer implements Runnable
                             status = "SLOW";
                         }
 
-                        data.put("status", status);
+                        doc.put("status", status);
 
-                        LOG.info("key: {}, value: {}", key, data.toString());
+                        long ts = System.currentTimeMillis();
+
+                        doc.put("timestamp", ts);
+
+                        doc.put("inserted_at", DateFormat
+                                .getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM)
+                                .format(System.currentTimeMillis()));
+
+                        LOG.info("key: {}, value: {}", key, doc.toString());
 
                         bulkRequest.add(client.prepareIndex("summaries", "su", key)
-                                .setSource(data.toString(), XContentType.JSON)).get();
+                                .setSource(doc.toString(), XContentType.JSON)).get();
 
                         tmpCounter++;
                     }
@@ -160,7 +169,7 @@ public class KafkaESSummaryConsumer implements Runnable
 
                     bulkRequest = null;
 
-                    Thread.sleep(500);
+                    Thread.sleep(5000);
                 }
                 catch (Exception e)
                 {

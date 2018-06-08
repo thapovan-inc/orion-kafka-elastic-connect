@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.text.DateFormat;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -103,13 +104,21 @@ public class KafkaESFootPrintConsumer implements Runnable
 
                         String value = record.value();
 
-                        LOG.info("key: {}, value: {}", key, value);
+                        long ts = System.currentTimeMillis();
 
-                        Map<String, String> doc = new HashMap<>();
+                        Map<String, Object> doc = new HashMap<>();
 
                         doc.put("traceId", key);
 
                         doc.put("life_cycle_json", value);
+
+                        doc.put("timestamp", ts);
+
+                        doc.put("inserted_at", DateFormat
+                                .getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM)
+                                .format(System.currentTimeMillis()));
+
+                        LOG.info("key: {}, value: {}", key, doc);
 
                         bulkRequest.add(client.prepareIndex("footprint", "fp", record.key())
                                 .setSource(doc, XContentType.JSON)).get();
@@ -135,7 +144,7 @@ public class KafkaESFootPrintConsumer implements Runnable
 
                     bulkRequest = null;
 
-                    Thread.sleep(500);
+                    Thread.sleep(5000);
                 }
                 catch (Exception e)
                 {
