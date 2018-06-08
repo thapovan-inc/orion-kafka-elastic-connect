@@ -89,8 +89,6 @@ public class KafkaESFootPrintConsumer implements Runnable
         {
             LOG.info("subscribing to topic: " + TOPIC_NAME);
 
-            Map<String, String> incompleteTracesMap = new HashMap<>();
-
             consumer.subscribe(Arrays.asList(TOPIC_NAME));
 
             while (true)
@@ -98,6 +96,8 @@ public class KafkaESFootPrintConsumer implements Runnable
                 try
                 {
                     int tmpCounter = 0;
+
+                    Map<String, String> incompleteTracesMap = null;
 
                     ConsumerRecords<String, String> records = consumer.poll(100);
 
@@ -132,6 +132,11 @@ public class KafkaESFootPrintConsumer implements Runnable
                             if (startTime <= 0 || endTime <= 0)
                             {
                                 doc.put("traceIncomplete", true);
+
+                                if (incompleteTracesMap == null)
+                                {
+                                    incompleteTracesMap = new HashMap<>();
+                                }
 
                                 incompleteTracesMap.put(key, value);
                             }
@@ -173,9 +178,12 @@ public class KafkaESFootPrintConsumer implements Runnable
                         ESUtil.logResponse(bulkResponse);
                     }
 
-                    bulkRequest = null;
+                    if (incompleteTracesMap != null && incompleteTracesMap.size() > 0)
+                    {
+                        produceIncompleteTraces(incompleteTracesMap);
+                    }
 
-                    produceIncompleteTraces(incompleteTracesMap);
+                    bulkRequest = null;
 
                     Thread.sleep(5000);
                 }
