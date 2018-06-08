@@ -4,7 +4,9 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
@@ -13,6 +15,7 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.TransportAddress;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.transport.client.PreBuiltTransportClient;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +33,8 @@ public class KafkaESFootPrintConsumer implements Runnable
 
     private static final String TOPIC_NAME = "fat-trace-object";
 
+    private static final String TOPIC_NAME_INCOMPLETE = "fat-incomplete-trace-object";
+
     private static final String ES_HOST = "search.local";
 
     private static final int ES_PORT = 9300;
@@ -38,11 +43,8 @@ public class KafkaESFootPrintConsumer implements Runnable
 
     private TransportClient client = null;
 
-
     public KafkaESFootPrintConsumer()
     {
-
-        System.out.println("Kafka footprint consumer started");
 
         LOG.info("Kafka footprint consumer started");
 
@@ -86,6 +88,8 @@ public class KafkaESFootPrintConsumer implements Runnable
         {
             LOG.info("subscribing to topic: " + TOPIC_NAME);
 
+            Map<String, String> incompleteTracesMap = new HashMap<>();
+
             consumer.subscribe(Arrays.asList(TOPIC_NAME));
 
             while (true)
@@ -106,24 +110,50 @@ public class KafkaESFootPrintConsumer implements Runnable
 
                         long ts = System.currentTimeMillis();
 
-                        Map<String, Object> doc = new HashMap<>();
+                        try
+                        {
+                            JSONObject fatJson = new JSONObject(value);
 
-                        doc.put("traceId", key);
+                            long startTime = fatJson.getLong("startTime");
 
-                        doc.put("life_cycle_json", value);
+                            long endTime = fatJson.getLong("endTime");
 
-                        doc.put("timestamp", ts);
+                            Map<String, Object> doc = new HashMap<>();
 
-                        doc.put("inserted_at", DateFormat
-                                .getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM)
-                                .format(System.currentTimeMillis()));
+                            doc.put("traceId", key);
 
-                        LOG.info("key: {}, value: {}", key, doc);
+                            doc.put("startTime", startTime);
 
-                        bulkRequest.add(client.prepareIndex("footprint", "fp", record.key())
-                                .setSource(doc, XContentType.JSON)).get();
+                            doc.put("endTime", endTime);
 
-                        tmpCounter++;
+                            doc.put("traceIncomplete", false);
+
+                            if (startTime <= 0 || endTime <= 0)
+                            {
+                                doc.put("traceIncomplete", true);
+
+                                incompleteTracesMap.put(key, value);
+                            }
+
+                            doc.put("life_cycle_json", value);
+
+                            doc.put("timestamp", ts);
+
+                            doc.put("inserted_at", DateFormat
+                                    .getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM)
+                                    .format(System.currentTimeMillis()));
+
+                            LOG.info("key: {}, value: {}", key, doc);
+
+                            bulkRequest.add(client.prepareIndex("footprint", "fp", record.key())
+                                    .setSource(doc, XContentType.JSON)).get();
+
+                            tmpCounter++;
+                        }
+                        catch (Exception e)
+                        {
+                            LOG.error("Error proccessing fat json record; " + e.getMessage() + ", traceId: " + key, e);
+                        }
                     }
 
                     LOG.info("tmpCounter: " + tmpCounter);
@@ -144,6 +174,8 @@ public class KafkaESFootPrintConsumer implements Runnable
 
                     bulkRequest = null;
 
+                    produceIncompleteTraces(incompleteTracesMap);
+
                     Thread.sleep(5000);
                 }
                 catch (Exception e)
@@ -152,7 +184,7 @@ public class KafkaESFootPrintConsumer implements Runnable
                 }
             }
         }
-        catch (WakeupException e)
+        catch (Exception e)
         {
             LOG.error("Kafka exception occurred", e);
         }
@@ -160,6 +192,42 @@ public class KafkaESFootPrintConsumer implements Runnable
         {
             consumer.commitSync();
             consumer.close();
+        }
+    }
+
+    public void produceIncompleteTraces(Map<String, String> traces)
+    {
+        if (traces == null || traces.size() == 0)
+        {
+            LOG.info("No records available to produce");
+            return;
+        }
+
+        try
+        {
+
+            Properties props = new Properties();
+
+            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka:29092");
+
+            props.put(ProducerConfig.CLIENT_ID_CONFIG, "produceIncompleteTraces");
+
+            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+
+            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+
+            KafkaProducer<String, String> producer = new KafkaProducer<>(props);
+
+            traces.forEach((k, v) ->
+            {
+                producer.send(new ProducerRecord<>(TOPIC_NAME_INCOMPLETE, k, v));
+            });
+
+            producer.close();
+        }
+        catch (Exception e)
+        {
+            LOG.error("Error producing incomplete topic to kafka: " + e.getMessage(), e);
         }
     }
 }
