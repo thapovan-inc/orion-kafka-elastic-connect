@@ -3,7 +3,5 @@ services:
   orionconnect:
     container_name: orionconnect
     build: .
-    extra_hosts:
-      - "kafka:kafka"
-      - "search.local:search.local"
     restart: always
+    network_mode: "host"
