@@ -65,7 +65,9 @@ public class KafkaESSummaryConsumer implements Runnable
 
         try
         {
-            client = new PreBuiltTransportClient(Settings.EMPTY)
+            Settings settings = Settings.builder().put("cluster.name", "docker-cluster").build();
+
+            client = new PreBuiltTransportClient(settings)
                     .addTransportAddress(new TransportAddress(InetAddress.getByName(ES_HOST), ES_PORT));
 
             LOG.info("es search client connected and {}:{}", ES_HOST, ES_PORT);
@@ -98,7 +100,7 @@ public class KafkaESSummaryConsumer implements Runnable
 
                     BulkRequestBuilder bulkRequest = client.prepareBulk();
 
-                    for (ConsumerRecord<String, String> record : records)
+                    for (ConsumerRecord<String, String> record: records)
                     {
                         String key = record.key();
 
@@ -151,11 +153,11 @@ public class KafkaESSummaryConsumer implements Runnable
                         tmpCounter++;
                     }
 
-                    LOG.info("tmpCounter: " + tmpCounter);
+                    LOG.debug("tmpCounter: " + tmpCounter);
 
                     if (tmpCounter == 0)
                     {
-                        LOG.info("Consumer poll returns empty");
+                        LOG.debug("Consumer poll returns empty");
                     }
 
                     consumer.commitAsync();

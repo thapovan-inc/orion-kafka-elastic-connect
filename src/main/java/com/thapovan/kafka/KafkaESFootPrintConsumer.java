@@ -71,7 +71,10 @@ public class KafkaESFootPrintConsumer implements Runnable
 
         try
         {
-            client = new PreBuiltTransportClient(Settings.EMPTY)
+
+            Settings settings = Settings.builder().put("cluster.name", "docker-cluster").build();
+
+            client = new PreBuiltTransportClient(settings)
                     .addTransportAddress(new TransportAddress(InetAddress.getByName(ES_HOST), ES_PORT));
 
             LOG.info("es search client connected and {}:{}", ES_HOST, ES_PORT);
@@ -103,7 +106,7 @@ public class KafkaESFootPrintConsumer implements Runnable
 
                     BulkRequestBuilder bulkRequest = client.prepareBulk();
 
-                    for (ConsumerRecord<String, String> record : records)
+                    for (ConsumerRecord<String, String> record: records)
                     {
                         String key = record.key();
 
@@ -115,9 +118,21 @@ public class KafkaESFootPrintConsumer implements Runnable
                         {
                             JSONObject fatJson = new JSONObject(value);
 
-                            long startTime = fatJson.getLong("startTime");
+                            LOG.info("incoming: {}", fatJson.toString());
 
-                            long endTime = fatJson.getLong("endTime");
+                            long startTime = 0;
+
+                            if (fatJson.has("startTime"))
+                            {
+                                startTime = fatJson.getLong("startTime");
+                            }
+
+                            long endTime = 0;
+
+                            if (fatJson.has("endTime"))
+                            {
+                                endTime = fatJson.getLong("endTime");
+                            }
 
                             Map<String, Object> doc = new HashMap<>();
 
@@ -162,11 +177,11 @@ public class KafkaESFootPrintConsumer implements Runnable
                         }
                     }
 
-                    LOG.info("tmpCounter: " + tmpCounter);
+                    LOG.debug("tmpCounter: " + tmpCounter);
 
                     if (tmpCounter == 0)
                     {
-                        LOG.info("Consumer poll returns empty");
+                        LOG.debug("Consumer poll returns empty");
                     }
 
                     consumer.commitAsync();
