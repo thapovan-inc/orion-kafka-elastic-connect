@@ -118,8 +118,6 @@ public class KafkaESFootPrintConsumer implements Runnable
                         {
                             JSONObject fatJson = new JSONObject(value);
 
-                            LOG.info("incoming: {}", fatJson.toString());
-
                             long startTime = 0;
 
                             if (fatJson.has("startTime"))
@@ -164,7 +162,7 @@ public class KafkaESFootPrintConsumer implements Runnable
                                     .getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM)
                                     .format(System.currentTimeMillis()));
 
-                            LOG.info("key: {}, value: {}", key, doc);
+                            // LOG.info("key: {}, value: {}", key, doc);
 
                             bulkRequest.add(client.prepareIndex("footprint", "fp", record.key())
                                     .setSource(doc, XContentType.JSON)).get();

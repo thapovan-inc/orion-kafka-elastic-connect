@@ -145,7 +145,7 @@ public class KafkaESSummaryConsumer implements Runnable
                                 .getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM)
                                 .format(System.currentTimeMillis()));
 
-                        LOG.info("key: {}, value: {}", key, doc.toString());
+                        // LOG.info("key: {}, value: {}", key, doc.toString());
 
                         bulkRequest.add(client.prepareIndex("summaries", "su", key)
                                 .setSource(doc.toString(), XContentType.JSON)).get();
